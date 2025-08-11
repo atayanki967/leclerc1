@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Charles Leclerc — 2025 Analysis (Converted)</title>
+  <script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#0f1724;
+      --muted:#9fb0c8;
+      --accent:#ffcc00;
+      --ferrari:#DC0000;
+      --white:#ffffff;
+    }
+    body{
+      margin:0;
+      font-family:Inter,system-ui,Arial,Helvetica,sans-serif;
+      background:linear-gradient(180deg,var(--bg), #071726);
+      color:var(--white);
+      padding:18px;
+    }
+    .container{max-width:1200px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    header h1{margin:0;font-size:1.4rem}
+    .muted{color:var(--muted)}
+    .card{background:linear-gradient(180deg,var(--card), #071026);padding:14px;border-radius:10px;margin-top:12px;border:1px solid rgba(255,255,255,0.03)}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{padding:8px;border:1px solid rgba(255,255,255,0.06);text-align:center;color:var(--white)}
+    th{background:#0b2538}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .full{grid-column:1/-1}
+    .small{font-size:0.9rem;color:var(--muted)}
+    .note{font-size:0.9rem;margin-top:8px;color:var(--muted)}
+    @media(max-width:900px){ .grid{grid-template-columns:1fr} }
+    .legend-inline{display:flex;gap:12px;align-items:center}
+    .legend-swatch{width:14px;height:14px;border-radius:3px;display:inline-block}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Charles Leclerc — 2025 Season Analysis (Converted)</h1>
+      <div class="muted">Converted from Python notebook → Interactive HTML (Plotly)</div>
+    </header>
+
+    <!-- 2. Standings & Overview -->
+    <section class="card">
+      <h2>Current Championship Standings (after Hungarian GP)</h2>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:320px">
+          <table>
+            <thead><tr><th>Driver</th><th>Team</th><th>Points</th><th>Wins</th><th>Podiums</th></tr></thead>
+            <tbody id="drivers-table"></tbody>
+          </table>
+        </div>
+        <div style="flex:1;min-width:320px">
+          <table>
+            <thead><tr><th>Constructor</th><th>Points</th></tr></thead>
+            <tbody id="constructors-table"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="note">Season calendar and results are embedded up to Hungarian GP (Round 14).</div>
+    </section>
+
+    <!-- Season calendar -->
+    <section class="card">
+      <h3>Season calendar (Rounds 1–14)</h3>
+      <table>
+        <thead><tr><th>Round</th><th>Race</th><th>Winner</th><th>Leclerc Position</th><th>Leclerc Points</th><th>Pole</th></tr></thead>
+        <tbody id="season-table"></tbody>
+      </table>
+    </section>
+
+    <!-- 4. Leclerc performance & charts -->
+    <section class="card">
+      <h2>Leclerc — Key Metrics & Visuals</h2>
+      <div class="grid">
+        <div>
+          <div id="points-prog" style="height:360px"></div>
+        </div>
+        <div>
+          <div id="position-history" style="height:360px"></div>
+        </div>
+        <div class="full">
+          <div id="points-per-race" style="height:360px"></div>
+        </div>
+      </div>
+      <div class="note">Annotations show DSQ and podium highlights.</div>
+    </section>
+
+    <!-- 5. Qualifying vs Race -->
+    <section class="card">
+      <h2>Qualifying vs Race Performance</h2>
+      <div id="quali-vs-race" style="height:420px"></div>
+      <div class="note">Qualifying positions are estimated where not available. DSQ shown as gap (no plotted race point).</div>
+    </section>
+
+    <!-- 6. Interactive small dashboard -->
+    <section class="card">
+      <h2>Mini Dashboard</h2>
+      <div class="grid">
+        <div>
+          <div id="top5-bar" style="height:320px"></div>
+        </div>
+        <div>
+          <div id="podium-pie" style="height:320px"></div>
+        </div>
+        <div class="full">
+          <div id="montecarlo" style="height:420px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Scenarios & remaining tracks -->
+    <section class="card">
+      <h2>Championship Scenarios & Remaining Tracks</h2>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:320px">
+          <h4 class="small">Scenarios (simple projection)</h4>
+          <pre id="scenarios-box" class="small" style="white-space:pre-wrap"></pre>
+        </div>
+        <div style="flex:1;min-width:320px">
+          <h4 class="small">Remaining tracks & potential</h4>
+          <table>
+            <thead><tr><th>Track</th><th>Type</th><th>Historical</th><th>Suitability</th><th>Sprint</th></tr></thead>
+            <tbody id="tracks-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. Story -->
+    <section class="card">
+      <h2>Data Story: The Charles Leclerc 2025 Journey</h2>
+      <pre id="story-text" class="small" style="white-space:pre-wrap"></pre>
+    </section>
+
+  </div>
+
+<script>
+/* ===========================
+   Embedded data (from your notebook)
+   =========================== */
+
+const drivers = [
+  {Driver:'Oscar Piastri', Team:'McLaren', Points:284, Wins:6, Podiums:10},
+  {Driver:'Lando Norris', Team:'McLaren', Points:275, Wins:5, Podiums:10},
+  {Driver:'Max Verstappen', Team:'Red Bull', Points:187, Wins:2, Podiums:5},
+  {Driver:'George Russell', Team:'Mercedes', Points:172, Wins:1, Podiums:5},
+  {Driver:'Charles Leclerc', Team:'Ferrari', Points:151, Wins:0, Podiums:5},
+  {Driver:'Lewis Hamilton', Team:'Ferrari', Points:109, Wins:0, Podiums:3},
+  {Driver:'Kimi Antonelli', Team:'Mercedes', Points:64, Wins:0, Podiums:2},
+  {Driver:'Alex Albon', Team:'Williams', Points:54, Wins:0, Podiums:0}
+];
+
+const constructors = [
+  {Team:'McLaren', Points:559},
+  {Team:'Ferrari', Points:260},
+  {Team:'Mercedes', Points:236},
+  {Team:'Red Bull', Points:194},
+  {Team:'Williams', Points:70},
+  {Team:'Aston Martin', Points:52},
+  {Team:'Sauber', Points:51},
+  {Team:'Racing Bulls', Points:45}
+];
+
+const season = [
+  {Round:1, Race:'Australia', Winner:'Norris', Leclerc_Position:8, Leclerc_Points:4, Pole:'Norris'},
+  {Round:2, Race:'China', Winner:'Piastri', Leclerc_Position:'DSQ', Leclerc_Points:0, Pole:'Piastri'},
+  {Round:3, Race:'Japan', Winner:'Verstappen', Leclerc_Position:4, Leclerc_Points:12, Pole:'Verstappen'},
+  {Round:4, Race:'Bahrain', Winner:'Piastri', Leclerc_Position:4, Leclerc_Points:12, Pole:'Piastri'},
+  {Round:5, Race:'Saudi Arabia', Winner:'Piastri', Leclerc_Position:3, Leclerc_Points:15, Pole:'Verstappen'},
+  {Round:6, Race:'Miami', Winner:'Piastri', Leclerc_Position:7, Leclerc_Points:6, Pole:'Verstappen'},
+  {Round:7, Race:'Emilia Romagna', Winner:'Verstappen', Leclerc_Position:6, Leclerc_Points:8, Pole:'Piastri'},
+  {Round:8, Race:'Monaco', Winner:'Norris', Leclerc_Position:2, Leclerc_Points:18, Pole:'Norris'},
+  {Round:9, Race:'Spain', Winner:'Piastri', Leclerc_Position:3, Leclerc_Points:15, Pole:'Piastri'},
+  {Round:10, Race:'Canada', Winner:'Russel', Leclerc_Position:5, Leclerc_Points:10, Pole:'Russell'},
+  {Round:11, Race:'Austria', Winner:'Norris', Leclerc_Position:3, Leclerc_Points:15, Pole:'Norris'},
+  {Round:12, Race:'Great Britain', Winner:'Norris', Leclerc_Position:14, Leclerc_Points:0, Pole:'Verstappen'},
+  {Round:13, Race:'Belgium', Winner:'Piastri', Leclerc_Position:3, Leclerc_Points:20, Pole:'Norris'},
+  {Round:14, Race:'Hungary', Winner:'Norris', Leclerc_Position:4, Leclerc_Points:12, Pole:'Leclerc'}
+];
+
+const quali_vs_race = {
+  Race: season.map(s => s.Race),
+  Quali_Position: [7,5,6,3,4,8,5,2,4,6,2,5,3,1],
+  Race_Position: season.map(s => (typeof s.Leclerc_Position === 'number' ? s.Leclerc_Position : null))
+};
+
+const remaining_tracks = [
+  {Track:'Netherlands', Type:'Medium-High DF', Historical:'P3', Suitability:6, Sprint:'No'},
+  {Track:'Italy', Type:'Low DF', Historical:'P1', Suitability:9, Sprint:'No'},
+  {Track:'Azerbaijan', Type:'Street', Historical:'P2', Suitability:8, Sprint:'No'},
+  {Track:'Singapore', Type:'Street', Historical:'P2', Suitability:7, Sprint:'No'},
+  {Track:'United States', Type:'Balanced', Historical:'P1', Suitability:7, Sprint:'Yes'},
+  {Track:'Mexico', Type:'High Altitude', Historical:'P3', Suitability:8, Sprint:'No'},
+  {Track:'Brazil', Type:'Balanced', Historical:'P4', Suitability:7, Sprint:'Yes'},
+  {Track:'Las Vegas', Type:'Street', Historical:'P2', Suitability:8, Sprint:'No'},
+  {Track:'Qatar', Type:'High Speed', Historical:'P5', Suitability:6, Sprint:'Yes'},
+  {Track:'Abu Dhabi', Type:'Balanced', Historical:'P2', Suitability:7, Sprint:'No'}
+];
+
+/* ===========================
+   Populate tables
+   =========================== */
+function populateTables(){
+  const dt = document.getElementById('drivers-table');
+  drivers.forEach(d=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${d.Driver}</td><td>${d.Team}</td><td>${d.Points}</td><td>${d.Wins}</td><td>${d.Podiums}</td>`;
+    dt.appendChild(tr);
+  });
+  const ct = document.getElementById('constructors-table');
+  constructors.forEach(c=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${c.Team}</td><td>${c.Points}</td>`;
+    ct.appendChild(tr);
+  });
+  const st = document.getElementById('season-table');
+  season.forEach(s=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.Round}</td><td>${s.Race}</td><td>${s.Winner}</td><td>${s.Leclerc_Position}</td><td>${s.Leclerc_Points}</td><td>${s.Pole}</td>`;
+    st.appendChild(tr);
+  });
+  const tt = document.getElementById('tracks-table');
+  remaining_tracks.forEach(t=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${t.Track}</td><td>${t.Type}</td><td>${t.Historical}</td><td>${t.Suitability}</td><td>${t.Sprint}</td>`;
+    tt.appendChild(tr);
+  });
+}
+
+/* ===========================
+   Charts
+   =========================== */
+
+function plotPointsProgression(){
+  const rounds = season.map(s=>s.Round);
+  const points = season.map(s=>s.Leclerc_Points);
+  const cum = points.reduce((acc,p,i)=>{ acc.push((acc[i-1]||0) + p); return acc; },[]);
+  const trace = {
+    x: season.map(s=>s.Race),
+    y: cum,
+    mode:'lines+markers',
+    marker:{color: '#DC0000'},
+    line:{color:'#DC0000', width:3},
+    name: 'Cumulative Points'
+  };
+  const layout = {
+    paper_bgcolor:'rgba(0,0,0,0)',
+    plot_bgcolor:'rgba(0,0,0,0)',
+    font:{color:'#fff'},
+    yaxis:{title:'Points'},
+    xaxis:{tickangle:-45}
+  };
+  Plotly.newPlot('points-prog',[trace],layout,{displayModeBar:false});
+}
+
+function plotPositionHistory(){
+  const races = season.map(s=>s.Race);
+  const pos = season.map(s=> typeof s.Leclerc_Position === 'number' ? s.Leclerc_Position : null );
+  const trace = {
+    x: races,
+    y: pos,
+    mode:'lines+markers',
+    line:{color:'gold'},
+    marker:{size:8},
+    name:'Finishing Position'
+  };
+  const layout = {
+    paper_bgcolor:'rgba(0,0,0,0)',
+    plot_bgcolor:'rgba(0,0,0,0)',
+    font:{color:'#fff'},
+    yaxis:{autorange:'reversed', title:'Position'},
+    xaxis:{tickangle:-45}
+  };
+  Plotly.newPlot('position-history',[trace],layout,{displayModeBar:false});
+}
+
+function plotPointsPerRace(){
+  const races = season.map(s=>s.Race);
+  const pts = season.map(s=>s.Leclerc_Points);
+  const trace = {
+    x: races,
+    y: pts,
+    type:'bar',
+    marker:{color:'#DC0000'},
+    name:'Points per race'
+  };
+  const layout = {
+    paper_bgcolor:'rgba(0,0,0,0)',
+    plot_bgcolor:'rgba(0,0,0,0)',
+    font:{color:'#fff'},
+    xaxis:{tickangle:-45},
+    yaxis:{title:'Points'}
+  };
+  Plotly.newPlot('points-per-race',[trace],layout,{displayModeBar:false});
+}
+
+function plotQualiVsRace(){
+  const races = quali_vs_race.Race;
+  const quali = quali_vs_race.Quali_Position;
+  const race = quali_vs_race.Race_Position.map(v => v===null? null: v);
+  const t1 = { x:races, y:quali, mode:'lines+markers', name:'Qualifying', line:{color:'#f5a623'}, marker:{size:7}};
+  const t2 = { x:races, y:race, mode:'lines+markers', name:'Race', line:{color:'#4cff4c'}, marker:{size:7}};
+  const layout = {
+    paper_bgcolor:'rgba(0,0,0,0)',
+    plot_bgcolor:'rgba(0,0,0,0)',
+    font:{color:'#fff'},
+    yaxis:{autorange:'reversed', dtick:1, title:'Position'},
+    xaxis:{tickangle:-45}
+  };
+  Plotly.newPlot('quali-vs-race',[t1,t2],layout,{displayModeBar:false});
+}
+
+function plotTop5Bar(){
+  const top5 = drivers.slice(0,5);
+  const trace = { x: top5.map(d=>d.Driver), y: top5.map(d=>d.Points), type:'bar', marker:{color:['#FF8700','#FF8700','#0600EF','#00D2BE','#DC0000']}};
+  const layout = {paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', font:{color:'#fff'}, yaxis:{title:'Points'}};
+  Plotly.newPlot('top5-bar',[trace],layout,{displayModeBar:false});
+}
+
+function plotPodiumPie(){
+  // compute podium counts from season.Leclerc_Position
+  const positions = season.map(s => s.Leclerc_Position).filter(p => typeof p === 'number');
+  const p1 = positions.filter(p=>p===1).length;
+  const p2 = positions.filter(p=>p===2).length;
+  const p3 = positions.filter(p=>p===3).length;
+  const others = positions.filter(p=>p>3 && p<=10).length;
+  const outside = season.length - positions.length; // includes DSQ
+  const values = [p1,p2,p3,others,outside];
+  const labels = ['P1','P2','P3','P4-P10','DNF/DSQ'];
+  Plotly.newPlot('podium-pie',[{values:values, labels:labels, type:'pie', marker:{colors:['gold','silver','#CD7F32','lightblue','gray']}}], {paper_bgcolor:'rgba(0,0,0,0)',font:{color:'#fff'}},{displayModeBar:false});
+}
+
+/* Monte Carlo simulation (JS) */
+function runMonteCarlo(){
+  // use mean and std of Leclerc's nonzero race points
+  const pts = season.map(s=>s.Leclerc_Points).filter(p=>p>0);
+  const mean = pts.reduce((a,b)=>a+b,0)/pts.length;
+  const variance = pts.reduce((acc,v)=>acc + Math.pow(v-mean,2),0)/pts.length;
+  const std = Math.sqrt(variance);
+  const current_points = 151;
+  const leader_points = 284;
+  const races_remaining = 10;
+  const sims = 8000;
+  const results = [];
+  for(let i=0;i<sims;i++){
+    let sim_total = current_points;
+    for(let r=0;r<races_remaining;r++){
+      // draw normal and clip
+      let draw = randNormal(mean,std);
+      if(draw < 0) draw = 0;
+      if(draw > 34) draw = 34;
+      sim_total += draw;
+    }
+    results.push(sim_total);
+  }
+  // histogram
+  const hist = histogram(results, 50);
+  const trace = { x: hist.x, y: hist.y, type:'bar', marker:{color:'#00cc66'} };
+  const layout = {paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', font:{color:'#fff'}, xaxis:{title:'Final Points'}, yaxis:{title:'Frequency'}};
+  Plotly.newPlot('montecarlo',[trace],layout,{displayModeBar:false});
+  // probabilities
+  const probChampion = results.filter(v=>v>leader_points).length / sims * 100;
+  const probTop3 = results.filter(v=>v>=230).length / sims * 100;
+  const probTop5 = results.filter(v=>v>=200).length / sims * 100;
+  // show summary besides chart
+  const summary = `Monte Carlo: ${sims} runs\nExpected final points (mean): ${Math.round(meanOfArray(results))}\nProbability of champion (final > ${leader_points}): ${probChampion.toFixed(2)}%\nProb Top3: ${probTop3.toFixed(2)}%  •  Prob Top5: ${probTop5.toFixed(2)}%`;
+  const el = document.createElement('div'); el.className='small'; el.style.marginTop='8px'; el.textContent = summary;
+  document.getElementById('montecarlo').appendChild(el);
+}
+
+/* Helpers for MC */
+function randNormal(mu, sigma){
+  // Box-Muller
+  let u=0,v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  let z = Math.sqrt(-2.0*Math.log(u)) * Math.cos(2.0*Math.PI*v);
+  return z*sigma + mu;
+}
+function histogram(arr, bins){
+  const min = Math.min(...arr), max = Math.max(...arr);
+  const step = (max - min) / bins;
+  const x = [], y = [];
+  for(let i=0;i<bins;i++){
+    x.push(min + i*step + step/2);
+    y.push(0);
+  }
+  arr.forEach(v=>{
+    const idx = Math.min(bins-1, Math.floor((v - min)/step));
+    y[idx] += 1;
+  });
+  return {x:x, y:y};
+}
+function meanOfArray(a){return a.reduce((s,x)=>s+x,0)/a.length}
+
+/* Scenario calculations (simple) */
+function calculateScenarios(){
+  const current_points = 151;
+  const leader_points = 284;
+  const races_remaining = 10;
+  const max_points_regular_race = 25;
+  const max_points_sprint_race = 34;
+  const realistic_leclerc = 18;
+  const realistic_leader = 12;
+  const current_leclerc = 10.79;
+  const current_leader = 20.29;
+
+  const scenario1 = {
+    Name:'Best Case (Miracle)',
+    Leclerc_Final: current_points + ( (7*max_points_regular_race) + (3*max_points_sprint_race) ),
+    Leader_Final: leader_points + (2 * races_remaining)
+  };
+  const scenario2 = {
+    Name:'Realistic Best',
+    Leclerc_Final: current_points + realistic_leclerc * races_remaining,
+    Leader_Final: leader_points + realistic_leader * races_remaining
+  };
+  const scenario3 = {
+    Name:'Current Form',
+    Leclerc_Final: current_points + current_leclerc * races_remaining,
+    Leader_Final: leader_points + current_leader * races_remaining
+  };
+  return [scenario1, scenario2, scenario3];
+}
+
+/* Story text */
+const story_text = `🏁 Chapter 1: A Promising Start That Never Materialized
+
+The 2025 season began with high hopes for Charles Leclerc and Ferrari. After Lewis 
+Hamilton's arrival at Maranello, expectations were sky-high. However, the season has 
+been a tale of 'what could have been' for the Monégasque driver.
+
+Starting in Australia with a disappointing P8, Leclerc's season hit an early low when 
+he was disqualified from P5 in China due to an underweight car - a rare technical 
+oversight that cost valuable points early in the championship.
+
+📊 Key Statistics:
+• 0 wins in 14 races (compared to 5 for Norris, 4 for Piastri)
+• 5 podiums, all third places - the bridesmaid, never the bride
+• Only 1 pole position (Hungary) - showcasing flashes of qualifying brilliance
+
+🔧 Chapter 2: Consistency Without Glory
+
+Despite the lack of wins, Leclerc has shown remarkable consistency:
+• 13 points finishes in 14 races (excluding DSQ)
+• Average finishing position of ~5
+• No mechanical DNFs - reliability has been strong
+
+The data reveals a driver extracting maximum performance from a car that simply 
+isn't quick enough to challenge McLaren's dominance. Ferrari's 260 constructor 
+points pale in comparison to McLaren's commanding 559.
+
+⚡ Chapter 3: The Turning Point That Never Came
+
+Multiple times this season, it seemed Leclerc might break through:
+• Saudi Arabia (P3): First podium, but McLaren too strong
+• Spain & Austria (P3): Consistent podiums, but no victory chance
+• Hungary: Stunning pole position, but race pace lacking
+
+Each weekend promised a breakthrough that never materialized. The SF-25 has proven 
+to be a solid points-scorer but lacks the raw pace to challenge for wins consistently.
+
+🎯 Chapter 4: The Mathematical Reality
+
+With 10 races remaining and 133 points behind Piastri, Leclerc faces an almost 
+impossible task. Our Monte Carlo simulations show:
+• Very small chance of winning the championship
+• Modest chance of podium finish at overall season end
+
+🔮 Chapter 5: Looking Ahead
+
+The remaining calendar offers both opportunities and challenges:
+• Strong tracks: Monza (Italy), Baku, Las Vegas could yield wins
+• Sprint races: 3 opportunities for extra points
+• Required: Average 18+ points per race (podium finishes)
+
+For Leclerc to salvage his season:
+1. Target wins at Monza and Baku (historically strong)
+2. Capitalize on any McLaren mistakes
+3. Maximize sprint race opportunities
+4. Maintain 100% reliability
+
+🏆 The Verdict:
+Mathematically possible but highly unlikely — Leclerc must perform nearly perfectly and rely on rivals' mistakes.
+`;
+
+/* ===========================
+   Render everything
+   =========================== */
+populateTables();
+plotPointsProgression();
+plotPositionHistory();
+plotPointsPerRace();
+plotQualiVsRace();
+plotTop5Bar();
+plotPodiumPie();
+runMonteCarlo();
+
+const scenarios = calculateScenarios();
+let sc_text = '';
+scenarios.forEach(s=>{
+  sc_text += `${s.Name}\n  • Leclerc final (proj): ${Math.round(s.Leclerc_Final)}\n  • Leader final (proj): ${Math.round(s.Leader_Final)}\n\n`;
+});
+document.getElementById('scenarios-box').textContent = sc_text;
+document.getElementById('story-text').textContent = story_text;
+
+
+
+</script>
+</body>
+</html><style>
+/* Genel Stil */
+/* Genel Tema */
+body {
+    background-color: #0f111a;
+    font-family: 'Poppins', sans-serif;
+    color: white;
+}
+
+/* Başlıklar */
+h1, h2, h3 {
+    color: #ffffff;
+    font-weight: bold;
+}
+
+h1 {
+    font-size: 32px;
+    margin-bottom: 20px;
+}
+
+h2 {
+    font-size: 26px;
+}
+
+/* Kartlar */
+.card {
+    background-color: #1c1f2a;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    margin-bottom: 20px;
+}
+
+/* Grafik Konteynerleri */
+.chart-container {
+    background-color: #1e1e2f;
+    padding: 15px;
+    border-radius: 10px;
+}
+
+/* Üst Bar */
+header {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    background-color: #1c1f2a;
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    z-index: 999;
+}
+
+header h1 {
+    color: #ff6f00;
+}
+
+/* Butonlar */
+button {
+    background-color: #ff6f00;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+button:hover {
+    background-color: #ff8c1a;
+}
+
+/* Responsive Düzen */
+@media (max-width: 768px) {
+    .card {
+        padding: 15px;
+    }
+    h1 {
+        font-size: 24px;
+    }
+}
+</style>
+</html>
+<!doctype html>
+<html lang="tr">    
+</html>
